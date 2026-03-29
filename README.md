@@ -47,35 +47,47 @@ java -jar target/api-blueprint-openapi-converter-1.0.0-jar-with-dependencies.jar
   target/openapi.yaml
 ```
 
-### 2) 複数ファイル一括変換（指定フォルダ）
+### 2) 設定ファイルで実行モードを制御
 
-`input` 配下の `.apib` をまとめて変換し、`output` 配下に同じ構造で `.yaml` を出力します。
+ルートの `converter.properties` で実行モードと入出力先を管理します。
 
-```bash
-java -jar target/api-blueprint-openapi-converter-1.0.0-jar-with-dependencies.jar \
-  --input-dir input \
-  --output-dir output
+```properties
+# 実行モード: single または batch
+mode=batch
+
+# single モード時
+single.input=src/test/resources/wazahyo.apib
+single.output=target/openapi.yaml
+
+# batch モード時
+batch.inputDir=input
+batch.outputDir=output
+batch.recursive=false
 ```
 
-サブディレクトリも含める場合は `--recursive` を指定します。
+`mode=batch` の場合、`batch.inputDir` 配下の `.apib` をまとめて変換し、
+`batch.outputDir` 配下に同じ構造で `.yaml` を出力します。
+
+実行:
+
+```bash
+java -jar target/api-blueprint-openapi-converter-1.0.0-jar-with-dependencies.jar
+```
+
+設定ファイルを切り替える場合:
 
 ```bash
 java -jar target/api-blueprint-openapi-converter-1.0.0-jar-with-dependencies.jar \
-  --input-dir input \
-  --output-dir output \
-  --recursive
+  --config ./path/to/converter.properties
 ```
 
 ### 3) IDE から実行（ソース指定しやすい設定）
 
 IDE の実行構成で `main class = xyz.livlog.converter.BlueprintConverterApplication` を指定し、
-次のどちらかで実行できます。
+`Program arguments` は不要（または `--config ...` のみ）にします。
 
-- **Program arguments で指定**
-    - 例: `--input-dir src/test/resources --output-dir target/openapi --recursive`
-- **VM options（システムプロパティ）で固定**
-    - 例: `-Dconverter.inputDir=src/test/resources -Dconverter.outputDir=target/openapi`
-    - この場合、Program arguments なしで実行可能
+- 例: `--config ./converter.properties`
+- 入力/出力先や single/batch の切替は `converter.properties` 側で管理
 
 ## サンプル
 
