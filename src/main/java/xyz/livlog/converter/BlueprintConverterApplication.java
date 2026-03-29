@@ -6,6 +6,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import xyz.livlog.converter.model.BlueprintDocument;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -31,39 +33,92 @@ public class BlueprintConverterApplication {
             return;
         }
 
-        Path inputDir = parsed.inputDir;
-        Path outputDir = parsed.outputDir;
-        List<Path> inputFiles = listApibFiles(inputDir, parsed.recursive);
+        ConverterConfig config = loadConfig(parsed.configPath);
+        runWithConfig(config);
+    }
 
-        if (inputFiles.isEmpty()) {
-            System.out.println("No .apib files found: " + inputDir.toAbsolutePath());
+    private static void runWithConfig(ConverterConfig config) throws Exception {
+        if ("single".equals(config.mode)) {
+            if (config.singleInputFile == null || config.singleOutputFile == null) {
+                throw new IllegalArgumentException("single mode requires single.input and single.output");
+            }
+            convertOne(config.singleInputFile, config.singleOutputFile);
             return;
         }
 
-        int converted = 0;
-        for (Path inputFile : inputFiles) {
-            Path relative = inputDir.relativize(inputFile);
-            String outputFileName = replaceExtension(relative.getFileName().toString(), ".yaml");
-            Path outputRelative = relative.resolveSibling(outputFileName);
-            Path outputFile = outputDir.resolve(outputRelative);
-            convertOne(inputFile, outputFile);
-            converted++;
+        if ("batch".equals(config.mode)) {
+            if (config.batchInputDir == null || config.batchOutputDir == null) {
+                throw new IllegalArgumentException("batch mode requires batch.inputDir and batch.outputDir");
+            }
+
+            List<Path> inputFiles = listApibFiles(config.batchInputDir, config.batchRecursive);
+            if (inputFiles.isEmpty()) {
+                System.out.println("No .apib files found: " + config.batchInputDir.toAbsolutePath());
+                return;
+            }
+
+            int converted = 0;
+            for (Path inputFile : inputFiles) {
+                Path relative = config.batchInputDir.relativize(inputFile);
+                String outputFileName = replaceExtension(relative.getFileName().toString(), ".yaml");
+                Path outputRelative = relative.resolveSibling(outputFileName);
+                Path outputFile = config.batchOutputDir.resolve(outputRelative);
+                convertOne(inputFile, outputFile);
+                converted++;
+            }
+
+            System.out.println("Batch converted: " + converted + " file(s)");
+            System.out.println("Input dir      : " + config.batchInputDir.toAbsolutePath());
+            System.out.println("Output dir     : " + config.batchOutputDir.toAbsolutePath());
+            return;
         }
 
-        System.out.println("Batch converted: " + converted + " file(s)");
-        System.out.println("Input dir      : " + inputDir.toAbsolutePath());
-        System.out.println("Output dir     : " + outputDir.toAbsolutePath());
+        throw new IllegalArgumentException("Unknown mode in config: " + config.mode + " (allowed: single, batch)");
+    }
+
+    private static ConverterConfig loadConfig(Path configPath) throws IOException {
+        if (!Files.exists(configPath)) {
+            throw new IllegalArgumentException("Config file not found: " + configPath.toAbsolutePath());
+        }
+
+        Properties props = new Properties();
+        try (InputStream in = Files.newInputStream(configPath)) {
+            props.load(in);
+        }
+
+        String mode = props.getProperty("mode", "batch").trim().toLowerCase(Locale.ROOT);
+        Path singleInput = pathOrNull(props.getProperty("single.input"));
+        Path singleOutput = pathOrNull(props.getProperty("single.output"));
+        Path batchInputDir = pathOrNull(props.getProperty("batch.inputDir", "input"));
+        Path batchOutputDir = pathOrNull(props.getProperty("batch.outputDir", "output"));
+        boolean batchRecursive = Boolean.parseBoolean(props.getProperty("batch.recursive", "false"));
+
+        return new ConverterConfig(mode, singleInput, singleOutput, batchInputDir, batchOutputDir, batchRecursive);
+    }
+
+    private static Path pathOrNull(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return Path.of(trimmed);
     }
 
     private static void printUsage() {
         System.out.println("Usage:");
         System.out.println("  java -jar converter.jar <input.apib> <output.yaml>");
-        System.out.println("  java -jar converter.jar [--input-dir <dir>] [--output-dir <dir>] [--recursive]");
+        System.out.println("  java -jar converter.jar [--config <file>] ");
         System.out.println("  java -jar converter.jar --help");
         System.out.println();
-        System.out.println("Defaults (batch mode):");
-        System.out.println("  input-dir  = -Dconverter.inputDir or ./input");
-        System.out.println("  output-dir = -Dconverter.outputDir or ./output");
+        System.out.println("Config defaults:");
+        System.out.println("  --config converter.properties");
+        System.out.println("  mode=batch");
+        System.out.println("  batch.inputDir=input");
+        System.out.println("  batch.outputDir=output");
+        System.out.println("  batch.recursive=false");
     }
 
     private static void convertOne(Path input, Path output) throws Exception {
@@ -112,45 +167,28 @@ public class BlueprintConverterApplication {
     }
 
     private static final class Arguments {
-        private final Path inputDir;
-        private final Path outputDir;
-        private final boolean recursive;
+        private final Path configPath;
         private final boolean showHelp;
 
-        private Arguments(Path inputDir, Path outputDir, boolean recursive, boolean showHelp) {
-            this.inputDir = inputDir;
-            this.outputDir = outputDir;
-            this.recursive = recursive;
+        private Arguments(Path configPath, boolean showHelp) {
+            this.configPath = configPath;
             this.showHelp = showHelp;
         }
 
         private static Arguments parse(String[] args) {
-            Path inputDir = Path.of(System.getProperty("converter.inputDir", "input"));
-            Path outputDir = Path.of(System.getProperty("converter.outputDir", "output"));
-            boolean recursive = false;
+            Path configPath = Path.of("converter.properties");
             boolean showHelp = false;
-
             List<String> errors = new ArrayList<>();
 
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
                 switch (arg) {
-                    case "--input-dir":
+                    case "--config":
                         if (i + 1 >= args.length) {
-                            errors.add("Missing value for --input-dir");
+                            errors.add("Missing value for --config");
                         } else {
-                            inputDir = Path.of(args[++i]);
+                            configPath = Path.of(args[++i]);
                         }
-                        break;
-                    case "--output-dir":
-                        if (i + 1 >= args.length) {
-                            errors.add("Missing value for --output-dir");
-                        } else {
-                            outputDir = Path.of(args[++i]);
-                        }
-                        break;
-                    case "--recursive":
-                        recursive = true;
                         break;
                     case "--help":
                     case "-h":
@@ -170,7 +208,32 @@ public class BlueprintConverterApplication {
                 System.exit(1);
             }
 
-            return new Arguments(inputDir, outputDir, recursive, showHelp);
+            return new Arguments(configPath, showHelp);
+        }
+    }
+
+    private static final class ConverterConfig {
+        private final String mode;
+        private final Path singleInputFile;
+        private final Path singleOutputFile;
+        private final Path batchInputDir;
+        private final Path batchOutputDir;
+        private final boolean batchRecursive;
+
+        private ConverterConfig(
+                String mode,
+                Path singleInputFile,
+                Path singleOutputFile,
+                Path batchInputDir,
+                Path batchOutputDir,
+                boolean batchRecursive
+        ) {
+            this.mode = mode;
+            this.singleInputFile = singleInputFile;
+            this.singleOutputFile = singleOutputFile;
+            this.batchInputDir = batchInputDir;
+            this.batchOutputDir = batchOutputDir;
+            this.batchRecursive = batchRecursive;
         }
     }
 }
