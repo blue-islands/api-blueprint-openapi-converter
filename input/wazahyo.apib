@@ -1,0 +1,201 @@
+FORMAT: 1A
+HOST: https://app.livlog.xyz/webapi
+
+# 和座標 API
+
+## はじめに
+
+「和座標 API」は、日本国内の位置情報を5文字の和文字コード「和座標」として扱うためのAPIです。
+このAPIでは、緯度経度から和座標コードへの変換、和座標コードから緯度経度やメッシュコードへの復元、さらに指定地点に基づく短歌生成を行うことができます。
+
+位置情報を単なる数値ではなく、文化的な表現や共有しやすい形式に変換することで、地図アプリ、観光サービス、創作支援、教育用途などへの活用を想定しています。
+
+### 主な利用シナリオ
+1. **位置情報の共有**: 緯度経度の代わりに、短く覚えやすい和座標コードで場所を共有する
+2. **地図アプリ連携**: 地図上の地点を和座標に変換し、独自の位置表現として表示する
+3. **文化的コンテンツ生成**: 指定した場所に基づいて短歌を生成し、位置情報に物語性を持たせる
+4. **教育・研究用途**: 日本独自の位置表現や地理情報表現の実験・研究に活用する
+
+## 認証
+
+このAPIを使用するためには、HTTPリクエストのヘッダーに認証情報を含める必要があります。
+
+### リブログアカウントの発行
+
+APIを使用する前に、以下のURLからBearer Tokenを取得してください。
+
++ URL: [https://livlog.xyz/sso/login](https://livlog.xyz/sso/login)
+
+# Group 和座標
+
+## 緯度経度 → 和座標コード [/v2/wazahyo/encode-latlon{?lat,lng}]
+
+### 緯度経度を和座標コードに変換 [GET]
+
+緯度と経度を指定することで、対応する和座標コードを取得できます。
+
++ Parameters
+    + lat: `35.170915` (number, required) - 緯度
+    + lng: `136.881537` (number, required) - 経度
+
++ Request リブログアカウントで発行した指定のトークンの指定が必要です。
+    + Headers
+
+            Accept: application/json
+            Authorization: Bearer [token]
+
++ Response 200 (application/json)
+
+        {
+          "metadata": {
+            "title": "Success",
+            "detail": "OK",
+            "status": 200
+          },
+          "_links": {
+            "self": {
+              "href": "/v2/wazahyo/encode-latlon"
+            }
+          },
+          "results": [
+            {
+              "code": "あいうえお"
+            }
+          ],
+          "errors": {}
+        }
+
+## 和座標コード → メッシュコード [/v2/wazahyo/decode-meshcode{?code}]
+
+### 和座標コードをメッシュコードに変換 [GET]
+
+和座標コードを指定することで、対応するメッシュコードを取得できます。
+
++ Parameters
+    + code: `あいうえお` (string, required) - 和座標コード
+
++ Request リブログアカウントで発行した指定のトークンの指定が必要です。
+    + Headers
+
+            Accept: application/json
+            Authorization: Bearer [token]
+
++ Response 200 (application/json)
+
+        {
+          "metadata": {
+            "title": "Success",
+            "detail": "OK",
+            "status": 200
+          },
+          "_links": {
+            "self": {
+              "href": "/v2/wazahyo/decode-meshcode"
+            }
+          },
+          "results": [
+            {
+              "meshCode": "5236578912"
+            }
+          ],
+          "errors": {}
+        }
+
+## 和座標コード → 緯度経度 [/v2/wazahyo/decode-latlon{?code}]
+
+### 和座標コードを緯度経度に変換 [GET]
+
+和座標コードを指定することで、対応する緯度経度を取得できます。
+
++ Parameters
+    + code: `あいうえお` (string, required) - 和座標コード
+
++ Request リブログアカウントで発行した指定のトークンの指定が必要です。
+    + Headers
+
+            Accept: application/json
+            Authorization: Bearer [token]
+
++ Response 200 (application/json)
+
+        {
+          "metadata": {
+            "title": "Success",
+            "detail": "OK",
+            "status": 200
+          },
+          "_links": {
+            "self": {
+              "href": "/v2/wazahyo/decode-latlon"
+            }
+          },
+          "results": [
+            {
+              "lat": 35.170915,
+              "lng": 136.881537
+            }
+          ],
+          "errors": {}
+        }
+
+## 緯度経度 → 短歌生成 [/v2/wazahyo/tanka{?lat,lng}]
+
+### 指定地点から短歌を生成 [GET]
+
+緯度と経度を指定することで、その地点に基づく短歌を生成します。
+
++ Parameters
+    + lat: `35.170915` (number, required) - 緯度
+    + lng: `136.881537` (number, required) - 経度
+
++ Request リブログアカウントで発行した指定のトークンの指定が必要です。
+    + Headers
+
+            Accept: application/json
+            Authorization: Bearer [token]
+
++ Response 200 (application/json)
+
+        {
+          "metadata": {
+            "title": "Success",
+            "detail": "OK",
+            "status": 200
+          },
+          "_links": {
+            "self": {
+              "href": "/v2/wazahyo/tanka"
+            }
+          },
+          "results": [
+            {
+              "tanka": "春の風 名古屋の街に 光さす..."
+            }
+          ],
+          "errors": {}
+        }
+
+# Group Error
+
+## エラー応答
+
+### 共通エラー例 [GET /v2/wazahyo/error-sample]
+
++ Response 400 (application/json)
+
+        {
+          "metadata": {
+            "title": "Bad Request",
+            "detail": "Invalid parameter",
+            "status": 400
+          },
+          "_links": {
+            "self": {
+              "href": "/v2/wazahyo/error-sample"
+            }
+          },
+          "results": [],
+          "errors": {
+            "message": "Invalid parameter"
+          }
+        }
